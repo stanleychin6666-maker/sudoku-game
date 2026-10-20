@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>數獨 Sudoku</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,'Noto Sans TC',sans-serif;color:#172536;background:#f4f7fb}
+    *{box-sizing:border-box} body{margin:0;padding:24px 14px} main{max-width:760px;margin:auto} h1{font-size:clamp(1.5rem,4vw,2rem);margin:.2em 0} p{color:#526275;line-height:1.6}
+    .panel{background:white;border:1px solid #dce4ed;border-radius:16px;padding:20px;box-shadow:0 3px 18px #1c32430b;margin:18px 0}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center} select,button{font:inherit;border-radius:8px;padding:10px 13px} select{border:1px solid #b4bfce;background:white} button{cursor:pointer;border:1px solid #c0cbdb;background:white;color:#17324f} button.primary{color:white;background:#215bac;border-color:#215bac} button:hover{filter:brightness(.95)} button:focus-visible,.cell:focus-visible{outline:3px solid #e39d19;outline-offset:1px}
+    #board{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));width:min(100%,495px);border:3px solid #253649;aspect-ratio:1;margin:0 auto 16px;background:white}
+    .cell{position:relative;min-width:0;min-height:0;border:0;border-right:1px solid #bcc9d5;border-bottom:1px solid #bcc9d5;border-radius:0;background:white;font-size:clamp(16px,3.7vw,25px);font-weight:550;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+    .cell:nth-child(3n){border-right:2px solid #253649}.cell:nth-child(9n){border-right:0}.cell:nth-child(n+19):nth-child(-n+27),.cell:nth-child(n+46):nth-child(-n+54){border-bottom:2px solid #253649}.cell:nth-child(n+73){border-bottom:0}
+    .cell.given{background:#e8eef5;color:#172536;cursor:default;font-weight:700}.cell.user{color:#2465bb}.cell.selected{background:#cbe3fb;box-shadow:inset 0 0 0 2px #3178cb}.cell.error{color:#c42b40;background:#ffe7e9}.cell.selected.error{box-shadow:inset 0 0 0 2px #b83d50}
+    /* 第三階段：紅色覆蓋固定格、玩家格與選取格；修正後移除 class 即恢復顏色。 */
+    .cell.conflict, .cell.given.conflict, .cell.user.conflict, .cell.selected.conflict{background:#ffd4d9;color:#a3132b;box-shadow:inset 0 0 0 2px #cf3049}
+    .cell.hint-cell,.cell.selected.hint-cell{background:#fff1bd;box-shadow:inset 0 0 0 3px #d58b0d}
+    .notes{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;align-items:center;justify-items:center;font-size:clamp(8px,1.7vw,12px);font-weight:500;color:#3d698c;line-height:1}
+    .note-num{min-width:0}
+    button[aria-pressed="true"]{background:#1b6c61;color:white;border-color:#1b6c61}
+    .toggle-row{display:flex;align-items:center;gap:9px;margin:14px 0;cursor:pointer;user-select:none}.toggle-row input{width:18px;height:18px;accent-color:#215bac;cursor:pointer}.toggle-row:focus-within{outline:2px solid #e39d19;outline-offset:3px;border-radius:5px}
+    .keypad{display:flex;justify-content:center;flex-wrap:wrap;gap:6px}.keypad button{min-width:44px;padding:11px 8px;flex:0 1 49px}
+    #status{min-height:3rem;border-radius:8px;background:#eef3f8;padding:12px;white-space:pre-wrap;color:#243d59} #status.bad{background:#fff0f0;color:#a52235}
+    #board-shell{position:relative} #pause-overlay:not([hidden]){display:flex;align-items:center;justify-content:center;min-height:220px;background:#e8eef5;border-radius:12px;padding:24px;text-align:center;font-weight:700} #board-shell.paused #board{display:none} #clock{font-variant-numeric:tabular-nums;font-size:1.35rem;min-width:70px} button:disabled{opacity:.5;cursor:not-allowed}
+    .hint{font-size:.88rem;margin:8px 0 0}.meta{text-align:center;color:#54657a;font-size:.92rem;margin:8px}.testbar{border-top:1px solid #e3e7ed;margin-top:20px;padding-top:15px}
+
+    :root{--bg:#f3f6fb;--panel:#fff;--text:#182b45;--muted:#61728a;--line:#c6d3e2;--fixed:#e7eef7;--active:#c9e4ff;--related:#eef6ff;--same:#daeafa;--accent:#225fc0;--cell:#fff}
+    :root[data-theme="dark"]{--bg:#101722;--panel:#1d2838;--text:#edf3ff;--muted:#b5c4d6;--line:#526276;--fixed:#2a3c51;--active:#235381;--related:#263950;--same:#344e6c;--accent:#8bbcff;--cell:#1d2838;color-scheme:dark}
+    body{background:var(--bg);color:var(--text);padding:clamp(8px,3vw,24px)}main{max-width:920px}p,.hint,.meta{color:var(--muted)}.panel{background:var(--panel);border-color:var(--line)}select,button{background:var(--panel);color:var(--text);border-color:var(--line)}button.primary{background:#225fc0;color:white;border-color:#225fc0}
+    #board{width:min(100%,min(74vh,530px));max-width:100%;border-color:var(--text);background:var(--cell)}.cell{background:var(--cell);color:var(--text);border-color:var(--line);font-size:clamp(15px,4vw,26px);touch-action:manipulation}.cell.given{background:var(--fixed);color:var(--text)}.cell.user{color:var(--accent)}.cell.related:not(.conflict):not(.hint-cell){background:var(--related)}.cell.same:not(.conflict):not(.hint-cell){background:var(--same)}.cell.selected:not(.conflict):not(.hint-cell){background:var(--active);box-shadow:inset 0 0 0 2px var(--accent)}.notes{font-size:clamp(7px,1.5vw,11px)}.note-num{line-height:1.1}#status{background:var(--fixed);color:var(--text)}#pause-overlay:not([hidden]){background:var(--fixed);color:var(--text)}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.tabs button[aria-selected="true"]{background:var(--accent);color:var(--bg)}.views[hidden],section[hidden]{display:none!important}.score-table{width:100%;border-collapse:collapse;font-size:.9rem}.score-table th,.score-table td{padding:10px 6px;text-align:left;border-bottom:1px solid var(--line)}.scroll-table{overflow-x:auto}.stat-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px}.stat-cards>div{background:var(--fixed);padding:14px;border-radius:12px}.stat-cards strong{display:block;font-size:1.4rem}.keypad button{min-height:44px}.controls button{min-height:40px}
+    @media(max-width:520px){.panel{padding:12px;margin:10px 0}#board{width:100%;margin-bottom:12px}.cell{font-size:clamp(15px,5vw,23px)}.notes{font-size:clamp(7px,2.1vw,10px)}.keypad{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:5px}.keypad button{min-width:0;width:100%;font-size:1rem;padding:10px 0}.controls{gap:6px}.controls button{padding:9px}.tabs button{flex:1}body{overflow-x:hidden}}
+
+    /* 正式發布版：僅調整顯示與版面，不更動數獨邏輯。 */
+    :root{--soft-shadow:0 8px 30px rgba(29,55,90,.055)}
+    main{max-width:1080px}.site-header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 4px 4px}.site-header h1{font-size:clamp(1.65rem,4vw,2.25rem);font-weight:750;letter-spacing:-.04em;margin:0}.site-header h1 span{font-size:.63em;font-weight:500;letter-spacing:.015em;color:var(--muted)}.tagline{margin:4px 0 0;font-size:.87rem}.header-decoration{font-size:.78rem;color:var(--muted)}
+    .panel{box-shadow:var(--soft-shadow);margin-top:10px;border-radius:18px}.tabs{margin:14px 0 8px;gap:6px}.tabs button{border-radius:10px;padding:10px 17px;min-height:44px}.tabs button[aria-selected=true]{background:#225fc0;color:#fff;border-color:#225fc0}
+    #game-view>.controls:first-child{padding-bottom:14px;border-bottom:1px solid var(--line)}.control-label{font-weight:650;font-size:.9rem}.game-stats{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:14px 0}.metric{font-size:.86rem;color:var(--muted)}.metric strong{font-size:1.35rem;color:var(--text);margin-left:6px}#pause{margin-left:auto}
+    .play-layout{display:grid;grid-template-columns:minmax(0,1fr) 208px;gap:22px;align-items:start}.play-main{min-width:0}#board{width:100%;max-width:540px;max-height:none;margin:0 auto 12px}.play-sidebar{display:flex;flex-direction:column;gap:16px;padding-top:8px}.action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.action-grid button{padding:12px 6px;min-height:48px;font-size:.88rem}.action-grid #notes-mode,.action-grid #logical-hint{grid-column:span 2}button{transition:background-color .12s ease,border-color .12s ease}.settings{border:1px solid var(--line);border-radius:12px;padding:12px}.settings summary{cursor:pointer;font-weight:650;font-size:.9rem}.settings-content{padding-top:8px}.settings-content .toggle-row{font-size:.85rem;margin:13px 0}#status{font-size:.88rem;min-height:0;margin:14px 0 0}.keypad{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:5px;max-width:540px;margin:auto}.keypad button{width:100%;min-width:0;max-width:none;padding:10px 0;font-size:1.08rem;font-weight:650;min-height:46px}.cell:nth-child(3n){border-right:2px solid var(--text)}.cell:nth-child(n+19):nth-child(-n+27),.cell:nth-child(n+46):nth-child(-n+54){border-bottom:2px solid var(--text)}.cell:nth-child(9n){border-right:0}
+    @media(max-width:760px){.play-layout{grid-template-columns:1fr;gap:10px}.play-sidebar{padding-top:0}.action-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.action-grid #notes-mode,.action-grid #logical-hint{grid-column:auto}.keypad{grid-template-columns:repeat(5,minmax(0,1fr))}.keypad button{min-height:48px}.play-sidebar .settings{margin-top:2px}.panel{padding:clamp(10px,3vw,20px)}}
+    @media(max-width:420px){.site-header .header-decoration{display:none}.game-stats{gap:8px}.game-stats .metric{font-size:.78rem}#clock{font-size:1.16rem}.action-grid{gap:6px}.action-grid button{font-size:.82rem;padding:10px 4px}.tabs button{padding:9px 8px;font-size:.86rem}.controls{gap:7px}#game-view>.controls:first-child button{padding:9px 10px}.keypad{gap:5px}}
+    @media(prefers-reduced-motion:reduce){button{transition:none}}
+  </style>
+</head>
+<body><main>
+  <header class="site-header"><div><h1>數獨 <span>Sudoku</span></h1><p class="tagline">每天一局，專注當下。</p></div><span class="header-decoration" aria-hidden="true">九宮格 · 每日挑戰</span></header>
+  
+  <nav class="tabs" aria-label="頁面切換"><button data-view="game" aria-selected="true">遊戲</button><button data-view="stats" aria-selected="false">個人成績</button><button data-view="leaderboard" aria-selected="false">排行榜</button></nav>
+  <section id="game-view" class="panel views">
+    <div class="controls">
+      <label for="difficulty" class="control-label">難度</label>
+      <select id="difficulty"><option value="easy">簡單</option><option value="medium">中等</option><option value="hard">困難</option></select>
+      <button class="primary" id="start">新遊戲</button>
+      <button id="restart">換一題</button><button id="daily" type="button">每日挑戰</button>
+    </div>
+    
+    <p id="daily-label" class="meta" aria-live="polite"></p>
+
+
+
+    <div class="game-stats"><span class="metric">時間 <strong id="clock">00:00</strong></span><span class="metric" id="mistakes">錯誤：0/3</span><span class="metric" id="hint-count">提示：0</span><button id="pause" type="button">暫停</button></div>
+    <p class="meta" id="meta">準備開始</p>
+    <div class="play-layout"><div class="play-main"><div id="board-shell"><div id="board" role="grid" aria-label="九乘九數獨題目"></div><div id="pause-overlay" hidden>遊戲已暫停：盤面已隱藏。請按「繼續」。</div></div>
+    <div class="keypad" id="keypad" aria-label="輸入數字">
+      <button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button><button data-n="4">4</button><button data-n="5">5</button><button data-n="6">6</button><button data-n="7">7</button><button data-n="8">8</button><button data-n="9">9</button><button data-n="0">清除</button>
+    </div>
+
+    </div><div class="play-sidebar"><div class="action-grid"><button id="undo" type="button">↶ 撤銷</button><button id="redo" type="button">↷ 重做</button><button id="notes-mode" type="button" aria-pressed="false">筆記模式：關閉</button><button id="logical-hint" type="button">智慧提示</button><button id="reset">清除填答</button><button id="validate">檢查答案</button></div><details class="settings"><summary>遊戲設定</summary><div class="settings-content"><label class="toggle-row"><input id="dark-mode" type="checkbox">深色模式</label><label class="toggle-row"><input id="same-highlight" type="checkbox" checked>高亮相同數字</label><label class="toggle-row"><input type="checkbox" id="auto-check" checked>自動檢查重複數字</label><label class="toggle-row"><input type="checkbox" id="mistake-limit" checked>最多允許三次錯誤</label></div></details></div></div>
+    <p role="status" aria-live="polite" id="status">選擇難度，點選「新遊戲」開始。</p>
+  </section>
+  <section class="panel views" id="stats-view" hidden><h2>個人成績</h2><div id="stat-summary"></div><h3>最近十場通關紀錄</h3><div id="recent-games" class="scroll-table"></div></section>
+  <section class="panel views" id="leaderboard-view" hidden><h2>排行榜</h2><label>難度 <select id="rank-difficulty"><option value="easy">簡單</option><option value="medium">中等</option><option value="hard">困難</option></select></label><p class="hint">依完成時間、錯誤次數、提示次數依序排序。本機資料只供同一瀏覽器使用。</p><div id="rank-list" class="scroll-table"></div></section>
+</main>
+<script src="sudoku.js"></script><script src="game-state.js"></script><script src="stage6.js"></script>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+let session=null, generating=false, ticker=null, currentMeta=null;
+function onCompleted(){if(!session||!session.won||!currentMeta)return;try{if(recordCompleted(localStorage,currentMeta.id,session,currentMeta)){updateStatistics();}updateDailyLabel();}catch(e){console.warn('成績儲存失敗',e);status('通關成功，但成績儲存失敗：'+e.message,true);}}
+function updateDailyLabel(){const day=taipeiDate(),d=dailyStatus(readStats(localStorage).records,day);el('daily-label').textContent=`台灣日期 ${day}｜今日挑戰：${d.completed?'已完成':'未完成'}｜連續完成 ${d.streak} 天`;}
+function tableMarkup(headers,rows){const esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));return '<table class="score-table"><thead><tr>'+headers.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table>';}
+function updateStatistics(){const records=readStats(localStorage).records,stats=statistics(records);let html=`<div class="stat-cards"><div>完成場次<strong>${stats.total}</strong></div><div>累計錯誤<strong>${stats.mistakes}</strong></div><div>累計提示<strong>${stats.hints}</strong></div></div>`;
+ html+=tableMarkup(['難度','完成場次','最快','平均'],['easy','medium','hard'].map(d=>[DIFFICULTY_LABELS[d],stats.byDifficulty[d].count,stats.byDifficulty[d].best===null?'—':formatTime(stats.byDifficulty[d].best),stats.byDifficulty[d].average===null?'—':formatTime(stats.byDifficulty[d].average)]));el('stat-summary').innerHTML=html;
+ el('recent-games').innerHTML=tableMarkup(['時間','模式','難度','耗時','錯誤','提示'],stats.recent.map(r=>[r.completedAt.slice(0,16).replace('T',' ')+(r.mode==='daily'?' UTC':' UTC'),r.mode==='daily'?'每日':'一般',DIFFICULTY_LABELS[r.difficulty],formatTime(r.seconds),r.mistakes,r.hints]));
+ updateLeaderboard();}
+function updateLeaderboard(){const d=el('rank-difficulty').value,records=sortedLeaderboard(readStats(localStorage).records,d);el('rank-list').innerHTML=tableMarkup(['排名','完成時間','錯誤','提示','日期'],records.slice(0,30).map((r,i)=>[i+1,formatTime(r.seconds),r.mistakes,r.hints,r.completedAt.slice(0,10)]));}
+function setView(name){for(const v of ['game','stats','leaderboard']){el(v+'-view').hidden=v!==name;document.querySelector(`[data-view="${v}"]`).setAttribute('aria-selected',String(v===name));}if(name!=='game')updateStatistics();}
+function updateTheme(){document.documentElement.dataset.theme=el('dark-mode').checked?'dark':'light';try{localStorage.setItem('sudoku-stage6-theme',el('dark-mode').checked?'dark':'light');}catch(_){}}
+
+function status(message,bad=false){el('status').textContent=message;el('status').classList.toggle('bad',bad);}
+function persist(){if(!session)return;try{saveSession(localStorage,session);}catch(e){status('無法儲存進度：'+e.message,true);}}
+function sync(){
+ if(!session)return;
+ el('clock').textContent=formatTime(session.seconds);
+ el('mistakes').textContent=`錯誤：${session.mistakes}${session.limitMistakes?'/3':''}`;
+ el('hint-count').textContent=`提示：${session.hintCount}`;
+ el('pause').textContent=session.running?'暫停':'繼續';el('pause').disabled=session.finished;
+ el('undo').disabled=!session.running||session.finished||!session.undo.length;
+ el('redo').disabled=!session.running||session.finished||!session.redo.length;
+ el('mistake-limit').checked=session.limitMistakes;
+ el('auto-check').checked=session.autoCheck;
+ el('notes-mode').setAttribute('aria-pressed',String(session.notesMode));
+ el('notes-mode').textContent=`筆記模式：${session.notesMode?'開啟':'關閉'}`;
+ el('difficulty').value=session.game.difficulty;
+ updateDailyLabel();
+ el('meta').textContent=`${DIFFICULTY_LABELS[session.game.difficulty]}｜${session.game.removed} 個空格｜${session.finished?(session.won?'已通關':'遊戲結束'):'進行中'}`;
+ el('board-shell').classList.toggle('paused',!session.running);
+ el('pause-overlay').hidden=session.running||session.finished;
+ el('keypad').hidden=!session.running||session.finished;
+ el('validate').disabled=!session.running||session.finished;
+ el('reset').disabled=!session.running||session.finished;
+ el('logical-hint').disabled=!session.running||session.finished;
+ render();
+}
+function render(){
+ const grid=el('board');grid.replaceChildren();if(!session||(!session.running&&!session.finished))return;
+ const conflicts=visibleConflicts(session.board,session.autoCheck);
+ for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+  const fixed=session.game.puzzle[r][c]!==0,cell=document.createElement('button');
+  cell.type='button';cell.className='cell '+(fixed?'given':'user');
+  if(session.selected){const [sr,sc]=session.selected; if(sr===r||sc===c||(Math.floor(sr/3)===Math.floor(r/3)&&Math.floor(sc/3)===Math.floor(c/3)))cell.classList.add('related');if(sr===r&&sc===c)cell.classList.add('selected');const value=session.board[sr][sc];if(el('same-highlight').checked&&value!==0&&session.board[r][c]===value)cell.classList.add('same');}
+  if(session.highlighted&&session.highlighted.row===r&&session.highlighted.col===c)cell.classList.add('hint-cell');
+  if(conflicts.has(r*9+c)){cell.classList.add('conflict');cell.setAttribute('aria-invalid','true');}
+  if(!fixed&&session.board[r][c]===0&&session.notes[r][c].size){
+   const ng=document.createElement('span');ng.className='notes';
+   for(let n=1;n<=9;n++){const mark=document.createElement('span');mark.className='note-num';mark.textContent=session.notes[r][c].has(n)?n:'';ng.appendChild(mark);}cell.appendChild(ng);
+  }else cell.textContent=session.board[r][c]||'';
+  cell.setAttribute('role','gridcell');cell.setAttribute('aria-readonly',String(fixed));
+  cell.setAttribute('aria-label',`第 ${r+1} 列第 ${c+1} 行，${fixed?'固定數字 '+session.board[r][c]:session.board[r][c]?'玩家填入 '+session.board[r][c]:'空格'}`);
+  cell.addEventListener('click',()=>{if(!session.running||session.finished)return;if(fixed){status('題目原本的數字不能修改。');return;}session.selected=[r,c];session.highlighted=null;sync();grid.children[r*9+c].focus();});
+  grid.appendChild(cell);
+ }
+}
+function endedMessage(){return session.won?`通關！時間 ${formatTime(session.seconds)}｜錯誤 ${session.mistakes} 次｜使用提示 ${session.hintCount} 次。按「開始遊戲」可玩新題目。`:`錯誤達到 3 次，遊戲結束。時間 ${formatTime(session.seconds)}。按「開始遊戲」重新開始。`;}
+function createGame(mode='normal'){
+ if(generating)return;const difficulty=el('difficulty').value;generating=true;el('start').disabled=el('restart').disabled=true;
+ status('正在生成新題目並驗證唯一解…');
+ setTimeout(()=>{
+  try{const day=taipeiDate();const game=mode==='daily'?dailyPuzzle(day,'medium'):generatePuzzle(difficulty);const next=createSession(game,{limitMistakes:el('mistake-limit').checked,autoCheck:el('auto-check').checked});
+   session=next;currentMeta=mode==='daily'?{id:'daily:'+day,mode:'daily',day}:{id:makeGameId(),mode:'normal',day:null};localStorage.removeItem(SAVE_KEY);writeMeta(localStorage,currentMeta);persist();sync();setView('game');status(mode==='daily'?'台灣每日挑戰已開始，題目具有唯一解。':'新遊戲開始，計時器已啟動，題目具有唯一解。');}
+  catch(e){status('產生失敗：'+e.message+'；已保留舊遊戲。',true);}
+  finally{generating=false;el('start').disabled=el('restart').disabled=false;}
+ },20);
+}
+function inputNumber(n){
+ if(!session||!session.running||session.finished){status('請先開始或繼續遊戲。');return;}
+ if(!session.selected){status('請先選擇一個空格。');return;}
+ const [r,c]=session.selected;
+ if(!sessionEdit(session,r,c,n)){status('不能修改固定數字，或此操作沒有變化。');return;}
+ session.highlighted=null;sync();persist();
+ if(session.finished){onCompleted();status(endedMessage(),!session.won);return;}
+ const conflicts=visibleConflicts(session.board,session.autoCheck).size;
+ status(session.notesMode&&n!==0?'筆記已更新。':conflicts?`目前有 ${conflicts} 個衝突格。`:'輸入已更新。',conflicts>0);
+}
+el('start').addEventListener('click',()=>createGame());el('restart').addEventListener('click',()=>createGame());el('daily').addEventListener('click',()=>{const day=taipeiDate();const x=dailyStatus(readStats(localStorage).records,day);if(x.completed){status('今日挑戰已完成，不可重複領取完成紀錄。');setView('game');return;}if(session&&currentMeta?.mode==='daily'&&currentMeta.day===day&&!session.finished){setView('game');status('已返回今日挑戰的進度。');return;}createGame('daily');});
+el('keypad').addEventListener('click',e=>{const b=e.target.closest('button[data-n]');if(b)inputNumber(Number(b.dataset.n));});
+window.addEventListener('keydown',e=>{if(e.target.matches('select,input,textarea')||e.ctrlKey||e.metaKey||e.altKey)return;if(/^[1-9]$/.test(e.key)){inputNumber(Number(e.key));e.preventDefault();}else if(['Delete','Backspace','0'].includes(e.key)){inputNumber(0);e.preventDefault();}});
+el('notes-mode').addEventListener('click',()=>{if(!session||!session.running)return;session.notesMode=!session.notesMode;sync();persist();status(`筆記模式已${session.notesMode?'開啟':'關閉'}。`);});
+el('logical-hint').addEventListener('click',()=>{if(!session)return;const h=sessionHint(session);session.highlighted=h.row===undefined?null:h;if(session.highlighted)session.selected=[h.row,h.col];sync();persist();status('智慧提示：'+h.message,h.kind==='invalid');});
+el('auto-check').addEventListener('change',()=>{if(!session)return;session.autoCheck=el('auto-check').checked;sync();persist();status(session.autoCheck?'已開啟自動檢查。':'已隱藏衝突提示，盤面不變。');});
+el('mistake-limit').addEventListener('change',()=>{if(!session)return;session.limitMistakes=el('mistake-limit').checked;finishIfNeeded(session);sync();persist();status(session.finished?endedMessage():session.limitMistakes?'已開啟三次錯誤限制。':'已關閉錯誤上限，仍統計錯誤。',session.finished&&!session.won);});
+el('pause').addEventListener('click',()=>{if(!session)return;const ok=session.running?sessionPause(session):sessionResume(session);if(ok){sync();persist();status(session.running?'遊戲已繼續。':'遊戲已暫停：盤面隱藏，計時停止。');}});
+el('undo').addEventListener('click',()=>{if(session&&sessionUndo(session)){session.highlighted=null;sync();persist();status('已撤銷，正式盤面與筆記已恢復。錯誤統計不會撤銷。');}});
+el('redo').addEventListener('click',()=>{if(session&&sessionRedo(session)){session.highlighted=null;sync();persist();status('已重做。');}});
+el('validate').addEventListener('click',()=>{if(!session||!session.running)return;if(!validateClues(session.board)){status('目前存在數字衝突。',true);return;}if(blankCount(session.board)){status(`尚有 ${blankCount(session.board)} 格未填，不算通關。`);return;}finishIfNeeded(session);sync();persist();onCompleted();status(session.finished?endedMessage():'盤面與正確答案不符。',!session.won);});
+el('reset').addEventListener('click',()=>{if(!session||!session.running)return;session.undo.push(snapshot(session));session.redo=[];session.board=cloneBoard(session.game.puzzle);session.notes=createNotes();session.selected=null;session.highlighted=null;sync();persist();status('已清除正式填答與筆記，固定數字未改變。錯誤次數與計時保留。');});
+function startClock(){if(ticker)clearInterval(ticker);let last=Date.now();ticker=setInterval(()=>{const now=Date.now(),delta=Math.max(0,Math.floor((now-last)/1000));if(delta<1)return;last+=delta*1000;if(session&&session.running&&!session.finished){sessionTick(session,delta);el('clock').textContent=formatTime(session.seconds);persist();}},250);}
+for(const button of document.querySelectorAll('[data-view]'))button.addEventListener('click',()=>setView(button.dataset.view));el('rank-difficulty').addEventListener('change',updateLeaderboard);el('dark-mode').checked=localStorage.getItem('sudoku-stage6-theme')==='dark';el('dark-mode').addEventListener('change',updateTheme);updateTheme();el('same-highlight').addEventListener('change',render);
+try{session=loadSession(localStorage);currentMeta=safeMetaLoad(localStorage);if(session&&!currentMeta){currentMeta={id:makeGameId(),mode:'normal',day:null};writeMeta(localStorage,currentMeta);}if(session){ // 重新整理後避免背景分頁偷跑時間；恢復時保持計時狀態與已記錄秒數。
+ sync();status(session.finished?endedMessage():'已從本機儲存恢復遊戲。');}
+ else createGame();}catch(e){console.warn('存檔載入失敗',e);try{localStorage.removeItem(SAVE_KEY);}catch(_){}status('舊存檔無效，已略過：'+e.message,true);createGame();}
+updateStatistics();updateDailyLabel();startClock();
+</script>
+</body></html>
