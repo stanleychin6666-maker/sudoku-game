@@ -46,7 +46,7 @@ function sessionExport(s) {
 function sessionImport(data) {
   if(!data||data.version!==1||!data.game) throw new Error('存檔版本不相容');
   const g=data.game;
-  if(!validateSudoku(g.solution)||!validateClues(g.puzzle)||countSolutions(g.puzzle,2)!==1) throw new Error('存檔題目無唯一解');
+  if(!validateClues(g.solution)||blankCount(g.solution)!==0||!validateClues(g.puzzle)||countSolutions(g.puzzle,2)!==1) throw new Error('存檔題目無唯一解');
   if(!HOLE_RANGES[g.difficulty]||blankCount(g.puzzle)<HOLE_RANGES[g.difficulty][0]||blankCount(g.puzzle)>HOLE_RANGES[g.difficulty][1]) throw new Error('難度與空格不符');
   if(g.puzzle.some((row,r)=>row.some((n,c)=>n!==0&&n!==g.solution[r][c])))throw new Error('固定數字與解答不符');
   const checkBoard=b=>Array.isArray(b)&&b.length===9&&b.every((row,r)=>Array.isArray(row)&&row.length===9&&row.every((n,c)=>Number.isInteger(n)&&n>=0&&n<=9&&(g.puzzle[r][c]===0||n===g.puzzle[r][c])));
